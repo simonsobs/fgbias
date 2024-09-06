@@ -1,4 +1,4 @@
-# lensing_fg_bias
+# fgbias
 Code for estimating CMB lensing biases, due to foregrounds, using simulations.
 
 Given a "foreground-only" map, Schaan and Ferraro (https://arxiv.org/abs/1804.06403) introduce a 
