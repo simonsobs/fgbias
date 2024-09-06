@@ -14,10 +14,35 @@ import argparse
 import yaml
 from collections import OrderedDict
 from orphics import maps
-from websky_model import WebSky
 from copy import deepcopy
 import sys
 from scipy.signal import savgol_filter
+
+def get_TT_secondary(qfunc_incfilter, Tf1,
+                     Tcmb, Tcmb_prime, 
+                     Tf2=None):
+    #Secondary is 
+    #<(Q[Tcmb, Tf_2]+Q[Tf_1, Tcmb])(Q[Tcmb, Tf_2]+Q[Tf_1, Tcmb])>
+    #to remove noise bias we need to subtract
+    #(Q[Tcmb_prime, Tf_2]+Q[Tf_1, Tcmb_prime]) from both
+    #sides of the correlator, where Tcmb_prime is a cmb
+    #map with the same unlensed CMB as T_cmb, but lensed
+    #by an independent kappa
+    if Tf2 is None:
+        Tf2 = Tf1
+    phi_Tcmb_Tf2 = qfunc_incfilter(
+        Tcmb, Tf2)
+    phi_Tf1_Tcmb = qfunc_incfilter(
+        Tf1, Tcmb)
+    phi_Tcmbp_Tf2 = qfunc_incfilter(
+        Tcmb_prime, Tf2)
+    phi_Tf1_Tcmbp = qfunc_incfilter(
+        Tf1, Tcmb_prime)
+    
+    phi = phi_Tcmb_Tf2[0]+phi_Tf1_Tcmb[0]
+    phip = phi_Tcmbp_Tf2[0]+phi_Tf1_Tcmbp[0]
+    S = curvedsky.alm2cl(phi)-curvedsky.alm2cl(phip)
+    return S
 
 def get_all_secondary_terms(
         qfunc_TT, qfunc_TE, 
@@ -45,33 +70,26 @@ def get_all_secondary_terms(
     phi_Tcmbp_Tf2 = qfunc_TT(cmb_prime_alm, Tf2)
     phi_Tf1_Tcmbp = qfunc_TT(Tf2, cmb_prime_alm)
 
-    kappa_TT = lensing.phi_to_kappa(
-        phi_Tcmb_Tf2[0]+phi_Tf1_Tcmb[0])
-    kappa_TTp = lensing.phi_to_kappa(
-        phi_Tcmbp_Tf2[0]+phi_Tf1_Tcmbp[0])
+    phi_TT = phi_Tcmb_Tf2[0]+phi_Tf1_Tcmb[0]
+    phi_TTp = phi_Tcmbp_Tf2[0]+phi_Tf1_Tcmbp[0]
 
-    S_TTTT = curvedsky.alm2cl(kappa_TT)-curvedsky.alm2cl(kappa_TTp)
+    S_TTTT = curvedsky.alm2cl(phi_TT)-curvedsky.alm2cl(phi_TTp)
 
     #Now pol
     #E, E_prime, B, B_prime = (cmb_alm[1], cmb_prime_alm[1],
     #                          cmb_alm[2], cmb_prime_alm[2])
     #print("E[100:110]:", E[100:110])
     #print("E_prime[100:110]:", E_prime[100:110])
-    kappa_Tf1_Ecmb = lensing.phi_to_kappa(
-        qfunc_TE(Tf1, cmb_alm)[0]
-        )
-    print("kappa_Tf1_Ecmb[100:110]:", kappa_Tf1_Ecmb[100:110])
-    kappa_Tf1_Ecmbp = lensing.phi_to_kappa(
-        qfunc_TE(Tf1, cmb_prime_alm)[0]
-        )
-    print("kappa_Tf1_Ecmbp[100:110]:", kappa_Tf1_Ecmbp[100:110])
+    phi_Tf1_Ecmb = qfunc_TE(Tf1, cmb_alm)[0]
+        
+    phi_Tf1_Ecmbp = qfunc_TE(Tf1, cmb_prime_alm)[0]
 
     S_TTTE = (
-        curvedsky.alm2cl(kappa_TT, kappa_Tf1_Ecmb)
-        - curvedsky.alm2cl(kappa_TTp, kappa_Tf1_Ecmbp)
+        curvedsky.alm2cl(phi_TT, phi_Tf1_Ecmb)
+        - curvedsky.alm2cl(phi_TTp, phi_Tf1_Ecmbp)
         )
-    S_TETE = (curvedsky.alm2cl(kappa_Tf1_Ecmb)
-              - curvedsky.alm2cl(kappa_Tf1_Ecmbp)
+    S_TETE = (curvedsky.alm2cl(phi_Tf1_Ecmb)
+              - curvedsky.alm2cl(phi_Tf1_Ecmbp)
               )
     #let's return a dictionary here
     #becuase there's more than a couple of
@@ -81,18 +99,16 @@ def get_all_secondary_terms(
          "TETE" : S_TETE,}
     
     if qfunc_tb is not None:
-        kappa_Tf1_Bcmb = lensing.phi_to_kappa(
-            qfunc_tb(Tf1, B)[0]
-            )
-        kappa_Tf1_Bcmbp = lensing.phi_to_kappa(
-            qfunc_tb(Tf1, B_prime)[0]
-            )
+        phi_Tf1_Bcmb = qfunc_tb(Tf1, B)[0]
+            
+        phi_Tf1_Bcmbp = qfunc_tb(Tf1, B_prime)[0]
+
         S_TTTB = (
-            curvedsky.alm2cl(kappa_TT, kappa_Tf1_Bcmb)
-            - curvedsky.alm2cl(kappa_TTp, kappa_Tf1_Bcmbp)
+            curvedsky.alm2cl(phi_TT, phi_Tf1_Bcmb)
+            - curvedsky.alm2cl(phi_TTp, phi_Tf1_Bcmbp)
             )
-        S_TBTB = (curvedsky.alm2cl(kappa_Tf1_Bcmb)
-                  - curvedsky.alm2cl(kappa_Tf1_Bcmbp)
+        S_TBTB = (curvedsky.alm2cl(phi_Tf1_Bcmb)
+                  - curvedsky.alm2cl(phi_Tf1_Bcmbp)
                   )
         S["TTTB"] = S_TTTB
         S["TBTB"] = S_TBTB
@@ -109,7 +125,7 @@ def get_bias_terms(fg_alms, recon_setup,
         jobs.append(
             (est, recon_setup["qfunc_%s"%est],
              None,
-             recon_stuff["get_fg_trispectrum_phi_N0_%s"%est]
+             recon_setup["get_fg_trispectrum_phi_N0_%s"%est]
             )
         )
         
@@ -136,29 +152,26 @@ def get_bias_terms(fg_alms, recon_setup,
         phi_fg_fg = qfunc(
             fg_alms_filtered, fg_alms_filtered)
 
-        kappa_fg_fg = lensing.phi_to_kappa(phi_fg_fg[0])
-
-        if args.save_fg_reconstruction:
-            f = opj(out_dir, 'kappa_fg_%s_%s.fits'%(freq,est_name))
-            print("saving kappa fg reconstruction to %s"%f)
-            hp.write_alm(f, kappa_fg_fg, overwrite=True)
+        outputs["phi_fg_fg"] = phi_fg_fg
 
         #Do primary
-        outputs['primary_'+est_name] = 2*curvedsky.alm2cl(kappa_fg_fg, kappa_alms)
+        outputs['primary_'+est_name] = 2*curvedsky.alm2cl(phi_fg_fg, phi_alm)
 
 
         #Do trispectrum
-        cl_tri_raw = curvedsky.alm2cl(kappa_fg_fg, kappa_fg_fg)
+        cl_tri_raw = curvedsky.alm2cl(phi_fg_fg, phi_fg_fg)
         N0_phi = get_tri_N0(cl_fg)[0] #0th element for gradient
-        N0_tri = N0_phi * (L*(L+1.)/2)**2
 
-        outputs['trispectrum_'+est_name] = cl_tri_raw - N0_tri
+        outputs['trispectrum_'+est_name] = cl_tri_raw - N0_phi
         outputs['tri_N0_'+est_name] = N0_tri
 
         outputs['total_'+est_name] = (outputs['primary_%s'%est_name]
                                    +outputs['secondary_%s'%est_name]
                                    +outputs['trispectrum_%s'%est_name]
         )
+
+    return outputs 
+
 
     output_data = np.zeros((recon_config["mlmax"]+1),
                            dtype=[(k,float) for k in outputs.keys()])

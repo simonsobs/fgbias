@@ -85,11 +85,14 @@ def norm_xtt_asym(est,lmax,glmin,glmax,llmin,llmax,rlmax,
         return norm_general.xtt_asym(est,lmax,glmin,glmax,llmin,llmax,rlmax,
                                      TT, OCTG, OCTL, gtype=gtype)
     
+def dummy_teb(alms):
+    return [alms, np.zeros_like(alms), np.zeros_like(alms)]
+
+    
 def setup_AAAA_recon(px, lmin, lmax, mlmax,
-                tcls, do_pol=False,
-                do_Tpol=False,
+                tcls, 
                 do_psh=False, do_prh=False, do_psh_prh=False,
-                profile=None, get_pol_norms=True):
+                profile=None):
     """
     Setup needed for reconstruction and foreground
     bias estimation.
@@ -100,9 +103,9 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
 
     norms = pytempura.get_norms(
         ["TT"]+["TE", "TB", "EE", "EB", "BB"], ucls,
-        {c:tcls_X[c][:mlmax+1] for c in tcls.keys()},
+        {c:tcls[c][:mlmax+1] for c in tcls.keys()},
         lmin, lmax, k_ellmax=mlmax)
-    recon_stuff["norms"] = norms_A
+    recon_stuff["norms"] = norms
 
     norm_lens = norms['TT']
 
@@ -125,9 +128,8 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
         return (curvedsky.almxfl(phi_nonorm[0], norm_lens[0]),
                 curvedsky.almxfl(phi_nonorm[1], norm_lens[1]))
     
-    qfunc = solenspipe.get_qfunc(px, ucls, mlmax, "TT", Al1=norms['TT'])
-    recon_stuff["qfunc"] = qfunc
-    recon_stuff["qfunc_incfilter"] = lambda X,Y: qfunc(filter_alms_X(X),
+    recon_stuff["qfunc_qe"] = qfunc
+    recon_stuff["qfunc_qe_incfilter"] = lambda X,Y: qfunc(filter_alms_X(X),
                                                                 filter_alms_X(Y))
 
     #Get the N0
@@ -148,7 +150,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
         return (norm_lens[0]**2 / norm_fg[0],
                 norm_lens[1]**2 / norm_fg[1])
 
-    recon_stuff["get_fg_trispectrum_phi_N0"] = get_fg_trispectrum_phi_N0
+    recon_stuff["get_fg_trispectrum_phi_N0_qe"] = get_fg_trispectrum_phi_N0
 
     if do_psh:
         R_src_tt = pytempura.get_cross(
@@ -240,7 +242,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
         recon_stuff["norm_prof"] = norm_prof
 
         def get_fg_trispectrum_phi_N0_prh(cl_fg):
-            Ctot = tcls_X['TT']**2 / cl_fg
+            Ctot = tcls['TT']**2 / cl_fg
             norm_lens = norm_lens
             norm_fg = pytempura.norm_lens.qtt(
                 mlmax, lmin,
@@ -314,7 +316,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
                 norm_lens[1]
             )
             def get_fg_trispectrum_phi_N0_psh_prh(cl_fg):
-                Ctot = tcls_X['TT']**2 / cl_fg
+                Ctot = tcls['TT']**2 / cl_fg
                 norm_lens = norm_lens
                 norm_fg = pytempura.norm_lens.qtt(
                     mlmax, lmin,
