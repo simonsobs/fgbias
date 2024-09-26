@@ -20,40 +20,6 @@ except KeyError:
     SEHGAL_DIR="/global/project/projectdirs/act/data/maccrann/sehgal"
     
 
-class ClBinner(object):
-    """
-    Class for binning Cls in equal
-    width bins, weighting by 2L+1
-    """
-    def __init__(self, lmin=100, lmax=1000, nbin=20, log=False):
-        self.lmin=lmin
-        self.lmax=lmax
-        self.nbin=nbin
-        if log:
-            log_bin_lims = np.linspace(
-                np.log(lmin), np.log(lmax), nbin+1)
-            #need to make this integers
-            bin_lims = np.ceil(np.exp(log_bin_lims))
-            log_bin_lims = np.log(bin_lims)
-            log_bin_mids = 0.5*(log_bin_lims[:-1]+log_bin_lims[1:])
-            self.bin_lims = np.exp(log_bin_lims).astype(int)
-            self.bin_mids = np.exp(log_bin_mids)
-        else:
-            self.bin_lims = np.ceil(np.linspace(
-                self.lmin, self.lmax+1, self.nbin+1
-            )).astype(int)
-            self.bin_mids = 0.5*(self.bin_lims[:-1]
-                                 +self.bin_lims[1:])
-        self.deltal = np.diff(self.bin_lims)
-        
-    def __call__(self, cl):
-        L = np.arange(len(cl)).astype(int)
-        w = 2*L+1
-        cl_binned = np.zeros(self.nbin)
-        for i in range(self.nbin):
-            use = (L>=self.bin_lims[i])*(L<self.bin_lims[i+1])
-            cl_binned[i] = np.average(cl[use], weights=w[use])
-        return cl_binned
 
 def norm_qtt_asym(est,lmax,glmin,glmax,llmin,llmax,
                    rlmax,TT,OCTG,OCTL,gtype='',profile=None):
@@ -86,23 +52,29 @@ def norm_xtt_asym(est,lmax,glmin,glmax,llmin,llmax,rlmax,
                                      TT, OCTG, OCTL, gtype=gtype)
     
 def dummy_teb(alms):
-    return [alms, np.zeros_like(alms), np.zeros_like(alms)]
+    return np.array([alms, np.zeros_like(alms), np.zeros_like(alms)])
 
     
 def setup_AAAA_recon(px, lmin, lmax, mlmax,
-                tcls, 
+                tcls, do_Tpol=False,
                 do_psh=False, do_prh=False, do_psh_prh=False,
                 profile=None):
     """
     Setup needed for reconstruction and foreground
-    bias estimation.
+    bias estimation. This is for the simplest case
+    where we use the same temperature map "A" in all 
+    four legs.
     """
     ucls,_ = futils.get_theory_dicts(grad=True, lmax=mlmax)
         
     recon_stuff = {}
+    recon_stuff["mlmax"] = mlmax
+    recon_stuff["lmax"] = lmax
+    recon_stuff["lmin"] = lmin
 
+    #Get norms from tempura
     norms = pytempura.get_norms(
-        ["TT"]+["TE", "TB", "EE", "EB", "BB"], ucls,
+        ["TT"]+["TE", "TB", "EE", "EB", "BB"], ucls, ucls,
         {c:tcls[c][:mlmax+1] for c in tcls.keys()},
         lmin, lmax, k_ellmax=mlmax)
     recon_stuff["norms"] = norms
@@ -116,10 +88,9 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
                 tcls, lmin, lmax, ignore_te=True)
         return alms_filtered
 
-
     recon_stuff["filter"] = filter_alms
 
-    def qfunc(X_filtered, Y_filtered):
+    def qfunc_tt_qe(X_filtered, Y_filtered):
         phi_nonorm = qe.qe_all(px, ucls, mlmax,
                                 fTalm=X_filtered, fEalm=None,fBalm=None,
                                 estimators=['TT'],
@@ -128,8 +99,8 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
         return (curvedsky.almxfl(phi_nonorm[0], norm_lens[0]),
                 curvedsky.almxfl(phi_nonorm[1], norm_lens[1]))
     
-    recon_stuff["qfunc_qe"] = qfunc
-    recon_stuff["qfunc_qe_incfilter"] = lambda X,Y: qfunc(filter_alms_X(X),
+    recon_stuff["qfunc_tt_qe"] = qfunc_tt_qe
+    recon_stuff["qfunc_tt_qe_incfilter"] = lambda X,Y: qfunc(filter_alms_X(X),
                                                                 filter_alms_X(Y))
 
     #Get the N0
@@ -152,12 +123,28 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
 
     recon_stuff["get_fg_trispectrum_phi_N0_qe"] = get_fg_trispectrum_phi_N0
 
+    if do_Tpol:
+        def qfunc_te_qe(X_filtered, Y_filtered):
+            phi_nonorm = qe_all(px, ucls, mlmax,
+                                fTalm=Y_filtered[0], fEalm=Y_filtered[1],fBalm=Y_filtered[2],
+                                estimators=['TE'],
+                                xfTalm=X_filtered[0], xfEalm=X_filtered[1],xfBalm=X_filtered[1])['TE']
+            #normalise and return
+            return np.asarray(
+                (curvedsky.almxfl(phi_nonorm[0], norms["TE"][0])),
+                (curvedsky.almxfl(phi_nonorm[1], norms["TE"][1])),
+            )
+
+        if do_psh:
+            raise NotImplementedError("not yet implemented Tpol with psh")
+        
+    
     if do_psh:
         R_src_tt = pytempura.get_cross(
             'SRC','TT',ucls,tcls,lmin,lmax,
             k_ellmax=mlmax)
         norm_src = pytempura.get_norms(
-                ['src'], ucls, tcls,
+                ['src'], ucls, ucls, tcls,
                 lmin, lmax,
                 k_ellmax=mlmax)['src']
 
@@ -170,15 +157,38 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
 
             )
 
-        qfunc_psh = solenspipe.get_qfunc(
-            px, ucls, mlmax, "TT", est2='SRC', Al1=norms['TT'],
-            Al2=norm_src, R12=R_src_tt)
-        recon_stuff["qfunc_psh"] = qfunc_psh
-        recon_stuff["qfunc_psh_incfilter"] = lambda X,Y: qfunc_psh(filter_alms(X),
+        def qfunc_tt_psh(X_filtered, Y_filtered):
+            
+            phi_nonorm = qe.qe_all(px, ucls, mlmax,
+                        fTalm=X_filtered, fEalm=None,fBalm=None,
+                        estimators=['TT'],
+                        xfTalm=Y_filtered, xfEalm=None,xfBalm=None)['TT']
+            
+            src_nonorm = qe.qe_source(px, mlmax, Y_filtered,
+                                      xfTalm=X_filtered)
+            
+            #print("src_nonorm", src_nonorm)
+            #print("norm_src", norm_src)
+            #print("R_src_tt", R_src_tt)
+            
+            phi_psh_grad = (
+                curvedsky.almxfl(phi_nonorm[0], norm_lens[0]) - 
+                curvedsky.almxfl(src_nonorm, norm_lens[0] * norm_src * R_src_tt)
+                           )
+            phi_psh_grad = curvedsky.almxfl(phi_psh_grad,
+                                            1./(1. - norm_lens[0] * norm_src * R_src_tt**2.)
+                                           )
+            phi_psh_curl = curvedsky.almxfl(phi_nonorm[1], norm_lens[1])
+            return np.array([phi_psh_grad, phi_psh_curl])
+        
+        #qfunc_psh = solenspipe.get_qfunc(
+        #    px, ucls, mlmax, "TT", est2='SRC', Al1=norms['TT'],
+        #    Al2=norm_src, R12=R_src_tt)
+        recon_stuff["qfunc_tt_psh"] = qfunc_tt_psh
+        recon_stuff["qfunc_tt_psh_incfilter"] = lambda X,Y: qfunc_psh(filter_alms(X),
                                                                 filter_alms(Y))
         def get_fg_trispectrum_phi_N0_psh(cl_fg):
             Ctot = tcls['TT']**2 / cl_fg
-            norm_lens = norm_lens
             norm_fg = pytempura.norm_lens.qtt(
                 mlmax, lmin,
                 lmax, ucls['TT'],
@@ -229,14 +239,38 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
                            R_prof_tt**2)
         )
 
-        qfunc_prh = solenspipe.get_qfunc(
-            px, ucls, mlmax, "TT",
-            Al1=norms['TT'], est2='SRC', Al2=norm_prof,
-            R12=R_prof_tt, profile=profile)
+        
+        #qfunc_prh = solenspipe.get_qfunc(
+        #    px, ucls, mlmax, "TT",
+        #    Al1=norms['TT'], est2='SRC', Al2=norm_prof,
+        #    R12=R_prof_tt, profile=profile)
+        
+        def qfunc_tt_prh(X_filtered, Y_filtered):
+            
+            phi_nonorm = qe.qe_all(px, ucls, mlmax,
+                        fTalm=X_filtered, fEalm=None,fBalm=None,
+                        estimators=['TT'],
+                        xfTalm=Y_filtered, xfEalm=None,xfBalm=None)['TT']
+            
+            prof_nonorm = qe.qe_source(px, mlmax, Y_filtered,
+                                      xfTalm=X_filtered, 
+                                      profile=profile)
+            
+            #print("src_nonorm", src_nonorm)
+            #print("norm_src", norm_src)
+            #print("R_src_tt", R_src_tt)
+            
+            phi_prh_grad = (curvedsky.almxfl(phi_nonorm[0], norm_lens[0]) - 
+                            curvedsky.almxfl(prof_nonorm, norm_lens[0] * norm_prof * R_prof_tt))
+            phi_prh_grad = curvedsky.almxfl(phi_prh_grad,
+                                            1./(1. - norm_lens[0] * norm_prof * R_prof_tt**2.)
+                                           )
+            phi_prh_curl = curvedsky.almxfl(phi_nonorm[1], norm_lens[1])
+            return np.array([phi_prh_grad, phi_prh_curl])
 
         recon_stuff["profile"] = profile
-        recon_stuff["qfunc_prh"] = qfunc_prh
-        recon_stuff["qfunc_prh_incfilter"] = lambda X,Y: qfunc_prh(filter_alms(X),
+        recon_stuff["qfunc_tt_prh"] = qfunc_prh
+        recon_stuff["qfunc_tt_prh_incfilter"] = lambda X,Y: qfunc_prh(filter_alms(X),
                                                                 filter_alms(Y))
         recon_stuff["R_prof_tt"] = R_prof_tt
         recon_stuff["norm_prof"] = norm_prof

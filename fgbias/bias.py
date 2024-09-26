@@ -17,8 +17,11 @@ from orphics import maps
 from copy import deepcopy
 import sys
 from scipy.signal import savgol_filter
+from .utils import get_cl_smooth
 
-def get_TT_secondary(qfunc_incfilter, Tf1,
+POLS=["TT","TE", "TB", "EE", "EB", "BB"]
+
+def get_TT_secondary(qfunc, Tf1,
                      Tcmb, Tcmb_prime, 
                      Tf2=None):
     #Secondary is 
@@ -30,16 +33,16 @@ def get_TT_secondary(qfunc_incfilter, Tf1,
     #by an independent kappa
     if Tf2 is None:
         Tf2 = Tf1
-    phi_Tcmb_Tf2 = qfunc_incfilter(
+    phi_Tcmb_Tf2 = qfunc(
         Tcmb, Tf2)
-    phi_Tf1_Tcmb = qfunc_incfilter(
+    phi_Tf1_Tcmb = qfunc(
         Tf1, Tcmb)
-    phi_Tcmbp_Tf2 = qfunc_incfilter(
+    phi_Tcmbp_Tf2 = qfunc(
         Tcmb_prime, Tf2)
-    phi_Tf1_Tcmbp = qfunc_incfilter(
+    phi_Tf1_Tcmbp = qfunc(
         Tf1, Tcmb_prime)
     
-    phi = phi_Tcmb_Tf2[0]+phi_Tf1_Tcmb[0]
+    phi = phi_Tcmb_Tf2[0]+phi_Tf1_Tcmb[0] #0th is gradient
     phip = phi_Tcmbp_Tf2[0]+phi_Tf1_Tcmbp[0]
     S = curvedsky.alm2cl(phi)-curvedsky.alm2cl(phip)
     return S
@@ -114,16 +117,32 @@ def get_all_secondary_terms(
         S["TBTB"] = S_TBTB
     return S
 
-def get_bias_terms(fg_alms, recon_setup, 
-                   phi_alms, cmb_alm, cmbp_alm,
-                   ests=["qe","psh","prh"], comm=None):
+def get_bias_terms(fg_alm, recon_setup, 
+                   phi_alm, cmb_alm, cmbp_alm,
+                   ests=["qe","psh","prh"], 
+                   do_mv=False, ignore_tpol=True,
+                   comm=None):
     
-    fg_alms_filtered = recon_setup["filter"](fg_alms)
+    cl_fg = get_cl_smooth(fg_alm)[:recon_setup["mlmax"]+1]
+    
+    #filter returns (T,E,B)
+    fg_alms_filtered = recon_setup["filter"](
+        utils.change_alm_lmax(fg_alm,
+        recon_setup["mlmax"])
+    )
+    cmb_alms_filtered = recon_setup["filter"](
+        utils.change_alm_lmax(cmb_alm,
+        recon_setup["mlmax"])
+    )
+    cmbp_alms_filtered = recon_setup["filter"](
+        utils.change_alm_lmax(cmbp_alm,
+        recon_setup["mlmax"])
+    )
     
     jobs = []
     for est in ests:
         jobs.append(
-            (est, recon_setup["qfunc_%s"%est],
+            (est, recon_setup["qfunc_tt_%s"%est],
              None,
              recon_setup["get_fg_trispectrum_phi_N0_%s"%est]
             )
@@ -132,7 +151,17 @@ def get_bias_terms(fg_alms, recon_setup,
     outputs = {}
         
     for i,job in enumerate(jobs):
+        
         est_name, qfunc, qfunc_te, get_tri_N0 = job
+        print("getting biases for est: %s"%est_name)
+        
+        print("doing fg-only reconstruction")
+        print("qfunc:", qfunc)
+        phi_fg_fg = qfunc(
+            fg_alms_filtered[0], fg_alms_filtered[0])
+
+        outputs["phi_fg_fg"] = phi_fg_fg #0th element for gradient 
+        
         #Do secondary
         print("doing secondary")
         if qfunc_te is not None:
@@ -145,46 +174,53 @@ def get_bias_terms(fg_alms, recon_setup,
             outputs["secondary_TETE_%s"%est_name] =	secondary_terms["TETE"]
         else:
             outputs["secondary_%s"%est_name] = get_TT_secondary(
-                qfunc, fg_alms_filtered,
+                qfunc, fg_alms_filtered[0],
                 cmb_alms_filtered[0], cmbp_alms_filtered[0], Tf2=None)
 
-        print("doing fg reconstruction")
-        phi_fg_fg = qfunc(
-            fg_alms_filtered, fg_alms_filtered)
-
-        outputs["phi_fg_fg"] = phi_fg_fg
-
         #Do primary
-        outputs['primary_'+est_name] = 2*curvedsky.alm2cl(phi_fg_fg, phi_alm)
+        outputs['primary_'+est_name] = 2*curvedsky.alm2cl(phi_fg_fg[0], phi_alm)
 
 
         #Do trispectrum
-        cl_tri_raw = curvedsky.alm2cl(phi_fg_fg, phi_fg_fg)
+        cl_tri_raw = curvedsky.alm2cl(phi_fg_fg[0], phi_fg_fg[0])
         N0_phi = get_tri_N0(cl_fg)[0] #0th element for gradient
 
         outputs['trispectrum_'+est_name] = cl_tri_raw - N0_phi
-        outputs['tri_N0_'+est_name] = N0_tri
+        outputs['tri_N0_'+est_name] = N0_phi
 
         outputs['total_'+est_name] = (outputs['primary_%s'%est_name]
                                    +outputs['secondary_%s'%est_name]
                                    +outputs['trispectrum_%s'%est_name]
         )
+        
+        if do_mv:
+            if ignore_tpol:
+                wL_sum = 0.
+                for pol in pols:
+                    wL_sum += 1./setup["norms"][pol]
+                wL_TT = (1./setup["norms"]["TT"]) / wL_sum
+                wL_TE = (1./setup["norms"]["TE"]) / wL_sum
+                wL_TB = (1./setup["norms"]["TB"]) / wL_sum
+                
+                #outputs["total_mv_"+est_name] = (
+                #    wL_TT**2 * outputs['total_'+est_name]
+                #    + 0.5 * (
+        
+    #also add true phi auto
+    outputs["cl_phi"] = curvedsky.alm2cl(phi_alm)
+        
+    if do_mv:
+        if ignore_tpol:
+            wL_sum = 0.
+            for pol in pols:
+                wL_sum += 1./fg_terms['norm_phi_%s'%pol]
+            wLs = {}
+            for pol in pols:
+                wLs[pol] = (1./fg_terms['norm_phi_%s'%pol])/wL_sum
+            wLs["wL_sum"] = wL_sum
+            
+            #simple mv estimate
+        
+    print("returning outputs")
 
     return outputs 
-
-
-    output_data = np.zeros((recon_config["mlmax"]+1),
-                           dtype=[(k,float) for k in outputs.keys()])
-    for k,v in outputs.items():
-        try:
-            print(k,v)
-            assert len(v)==recon_config["mlmax"]+1
-            output_data[k] = v
-        except ValueError as e:
-            print("failed to write column %s to output array"%k)
-            raise(e)
-    output_file = opj(out_dir, 'fg_terms_%s.npy'%freq)
-    print("saving to %s"%output_file)
-    np.save(output_file, output_data)
-        
-    
