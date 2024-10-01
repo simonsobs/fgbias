@@ -54,6 +54,22 @@ def norm_xtt_asym(est,lmax,glmin,glmax,llmin,llmax,rlmax,
 def dummy_teb(alms):
     return np.array([alms, np.zeros_like(alms), np.zeros_like(alms)])
 
+def setup_recon(px, lmin, lmax, mlmax,
+                tcls_A, tcls_B=None,
+                tcls_C=None, tcls_D=None,
+                tcls_AC=None, tcls_BD=None,
+                tcls_AD=None, tcls_BC=None,
+                do_Tpol=False, do_psh=False, do_prh=False,
+                do_psh_prh=False, profile=None):
+    if tcls_B is None:
+        return setup_AAAA_recon(
+            px, lmin, lmax, mlmax, tcls_A,
+            do_Tpol=do_Tpol, do_psh=do_psh,
+            do_prh=do_prh, do_psh_prh=do_psh_prh,
+            profile=profile)
+    else:
+        raise("NotImplementedError")
+    
     
 def setup_AAAA_recon(px, lmin, lmax, mlmax,
                 tcls, do_Tpol=False,
@@ -115,7 +131,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
         Ctot = tcls['TT']**2 / cl_fg
         norm_fg = pytempura.norm_lens.qtt(
             mlmax, lmin,
-            lmax, ucls['TT'],
+            lmax, ucls['TT'],ucls['TT'],
             Ctot,gtype='')
 
         return (norm_lens[0]**2 / norm_fg[0],
@@ -191,10 +207,10 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
             Ctot = tcls['TT']**2 / cl_fg
             norm_fg = pytempura.norm_lens.qtt(
                 mlmax, lmin,
-                lmax, ucls['TT'],
+                lmax, ucls['TT'], ucls['TT'],
                 Ctot,gtype='')
             norm_src_fg = pytempura.get_norms(
-                ['TT','src'], ucls, {'TT':Ctot},
+                ['src'], ucls, ucls, {'TT':Ctot},
                 lmin, lmax,
                 k_ellmax=mlmax)['src']
             R_src_fg = pytempura.get_cross(
