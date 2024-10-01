@@ -1,4 +1,5 @@
 # fgbias
+
 Code for estimating CMB lensing biases, due to foregrounds, using simulations.
 
 Given a "foreground-only" map, Schaan and Ferraro (https://arxiv.org/abs/1804.06403) introduce a 
@@ -8,9 +9,11 @@ This package provides code to do this.
 
 # Installation
 
-will make it python setup.py install-able 
+git clone, then `cd fgbias` then `pip install .`
 
 # Usage/examples
+
+See `examples/example1.ipynb` for basic usage.
 
 # Caveats
 
