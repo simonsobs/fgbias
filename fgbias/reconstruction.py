@@ -54,7 +54,7 @@ def norm_xtt_asym(est,lmax,glmin,glmax,llmin,llmax,rlmax,
 def dummy_teb(alms):
     return np.array([alms, np.zeros_like(alms), np.zeros_like(alms)])
 
-def setup_recon(px, lmin, lmax, mlmax,
+def setup_recon(px, lmin, lmax, mlmax, ucls,
                 tcls_A, tcls_B=None,
                 tcls_C=None, tcls_D=None,
                 tcls_AC=None, tcls_BD=None,
@@ -63,7 +63,7 @@ def setup_recon(px, lmin, lmax, mlmax,
                 do_psh_prh=False, profile=None):
     if tcls_B is None:
         return setup_AAAA_recon(
-            px, lmin, lmax, mlmax, tcls_A,
+            px, lmin, lmax, mlmax, ucls, tcls_A,
             do_Tpol=do_Tpol, do_psh=do_psh,
             do_prh=do_prh, do_psh_prh=do_psh_prh,
             profile=profile)
@@ -71,7 +71,7 @@ def setup_recon(px, lmin, lmax, mlmax,
         raise("NotImplementedError")
     
     
-def setup_AAAA_recon(px, lmin, lmax, mlmax,
+def setup_AAAA_recon(px, lmin, lmax, mlmax, ucls,
                 tcls, do_Tpol=False,
                 do_psh=False, do_prh=False, do_psh_prh=False,
                 profile=None):
@@ -81,7 +81,6 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax,
     where we use the same temperature map "A" in all 
     four legs.
     """
-    ucls,_ = futils.get_theory_dicts(grad=True, lmax=mlmax)
         
     recon_stuff = {}
     recon_stuff["mlmax"] = mlmax
