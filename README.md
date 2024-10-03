@@ -19,7 +19,13 @@ git clone, then `cd fgbias` then `pip install .`
 
 # Usage/examples
 
-See `examples/example1.ipynb` for basic usage.
+- See `examples/example1.ipynb` for basic usage.
+- `examples/dr6_bias.ipynb` for a DR6-like example.
+
+# To do
+- Port over code for asymmetric estimators (e.g. "gradient-cleaned")
+- MV estimator biases (pretty straightforward to get from the TT biases though)
+- Add a galaxy cross-correlation example
 
 # Caveats
 
@@ -29,6 +35,6 @@ There are some subtleties in estimating foreground biases that are difficult to 
 - As part of foreground mitigation, you may have applied source/cluster model subtraction to the foreground-only map. But these models
 may have been inferred from maps containing CMB + noise (to ensure realistic performance) in which case they will contain residuals related
 to the value of the CMB + noise at the source/cluster locations. These residuals would then be subtracted from the "foreground-only" map,
-and impart some additional bias.
+and could impart some additional bias.
 - Relatedly, a survey mask may have been applied to the simulations to ensure realism of the simulation. This would introduce a mean-field
-  to the foregound-bias estimate that may need to be estimated using simulations (or it may be negligible, depends on the case). 
+  to the foregound-bias estimate that may need to be estimated using simulations. If foregrounds are small, it may well be negligible.
