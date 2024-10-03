@@ -7,6 +7,12 @@ quick way of estimating the bias to the CMB lensing power sepctrum (measured via
 which calculates the primary bispectrum, secondary bispectrum and trispectrum seperately and then sums. 
 This package provides code to do this. 
 
+# Dependencies
+
+- [pixell](https://github.com/simonsobs/pixell/tree/master) (`pip install pixell`)
+- [falafel](https://github.com/simonsobs/falafel/tree/master)
+- [tempura](https://github.com/simonsobs/tempura/tree/main)
+
 # Installation
 
 git clone, then `cd fgbias` then `pip install .`
