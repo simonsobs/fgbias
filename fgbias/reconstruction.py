@@ -240,7 +240,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax, ucls,
             profile=profile)
 
         norm_prof = pytempura.get_norms(
-            ['TT','src'], ucls, tcls,
+            ['TT','src'], ucls, ucls, tcls,
             lmin, lmax,
             k_ellmax=mlmax, profile=profile)['src']
 
@@ -284,22 +284,21 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax, ucls,
             return np.array([phi_prh_grad, phi_prh_curl])
 
         recon_stuff["profile"] = profile
-        recon_stuff["qfunc_tt_prh"] = qfunc_prh
-        recon_stuff["qfunc_tt_prh_incfilter"] = lambda X,Y: qfunc_prh(filter_alms(X),
+        recon_stuff["qfunc_tt_prh"] = qfunc_tt_prh
+        recon_stuff["qfunc_tt_prh_incfilter"] = lambda X,Y: qfunc_tt_prh(filter_alms(X),
                                                                 filter_alms(Y))
         recon_stuff["R_prof_tt"] = R_prof_tt
         recon_stuff["norm_prof"] = norm_prof
 
         def get_fg_trispectrum_phi_N0_prh(cl_fg):
             Ctot = tcls['TT']**2 / cl_fg
-            norm_lens = norm_lens
             norm_fg = pytempura.norm_lens.qtt(
                 mlmax, lmin,
-                lmax, ucls['TT'],
+                lmax, ucls['TT'], ucls['TT'],
                 Ctot,gtype='')
 
             norm_src_fg = pytempura.get_norms(
-                ['TT','src'], ucls, {'TT':Ctot},
+                ['TT','src'], ucls, ucls, {'TT':Ctot},
                 lmin, lmax,
                 k_ellmax=mlmax, profile=profile)['src']
             R_src_fg = pytempura.get_cross(
