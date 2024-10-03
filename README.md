@@ -19,7 +19,13 @@ git clone, then `cd fgbias` then `pip install .`
 
 # Usage/examples
 
-See `examples/example1.ipynb` for basic usage.
+- See `examples/example1.ipynb` for basic usage.
+- `examples/dr6_bias.ipynb` for a DR6-like example.
+
+# To do
+- Port over code for asymmetric estimators (e.g. "gradient-cleaned")
+- MV estimator biases (pretty straightforward to get from the TT biases though)
+- Add a galaxy cross-correlation example
 
 # Caveats
 
