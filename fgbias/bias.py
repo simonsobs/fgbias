@@ -121,9 +121,9 @@ def get_bias_terms(fg_alm, recon_setup,
                    phi_alm, cmb_alm, cmbp_alm,
                    ests=["qe","psh","prh"], 
                    do_mv=False, ignore_tpol=True,
-                   comm=None):
+                   comm=None, w2=1., w4=1.):
     
-    cl_fg = get_cl_smooth(fg_alm)[:recon_setup["mlmax"]+1]
+    cl_fg = get_cl_smooth(fg_alm)[:recon_setup["mlmax"]+1] / w2
     
     #filter returns (T,E,B)
     fg_alms_filtered = recon_setup["filter"](
@@ -169,24 +169,24 @@ def get_bias_terms(fg_alm, recon_setup,
                 qfunc, qfunc_te, fg_alms_filtered,
                 cmb_alms_filtered, cmbp_alms_filtered
                 )
-            outputs["secondary_%s"%est_name] = secondary_terms["TTTT"]
-            outputs["secondary_TTTE_%s"%est_name] = secondary_terms["TTTE"]
-            outputs["secondary_TETE_%s"%est_name] =	secondary_terms["TETE"]
+            outputs["secondary_%s"%est_name] = secondary_terms["TTTT"] / w2
+            outputs["secondary_TTTE_%s"%est_name] = secondary_terms["TTTE"] / w2
+            outputs["secondary_TETE_%s"%est_name] =	secondary_terms["TETE"] / w2
         else:
             outputs["secondary_%s"%est_name] = get_TT_secondary(
                 qfunc, fg_alms_filtered[0],
-                cmb_alms_filtered[0], cmbp_alms_filtered[0], Tf2=None)
+                cmb_alms_filtered[0], cmbp_alms_filtered[0], Tf2=None) / w2
 
         #Do primary
-        outputs['primary_'+est_name] = 2*curvedsky.alm2cl(phi_fg_fg[0], phi_alm)
+        outputs['primary_'+est_name] = 2*curvedsky.alm2cl(phi_fg_fg[0], phi_alm) / w2
 
 
         #Do trispectrum
-        cl_tri_raw = curvedsky.alm2cl(phi_fg_fg[0], phi_fg_fg[0])
-        N0_phi = get_tri_N0(cl_fg)[0] #0th element for gradient
+        cl_tri_raw = curvedsky.alm2cl(phi_fg_fg[0], phi_fg_fg[0]) / w4
+        tri_N0 = get_tri_N0(cl_fg)[0] #0th element for gradient
 
         outputs['trispectrum_'+est_name] = cl_tri_raw - N0_phi
-        outputs['tri_N0_'+est_name] = N0_phi
+        outputs['tri_N0_'+est_name] = tri_N0 
 
         outputs['total_'+est_name] = (outputs['primary_%s'%est_name]
                                    +outputs['secondary_%s'%est_name]
