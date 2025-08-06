@@ -120,8 +120,13 @@ def get_all_secondary_terms(
 def get_bias_terms(fg_alm, recon_setup, 
                    phi_alm, cmb_alm, cmbp_alm,
                    ests=["qe","psh","prh"], 
-                   do_mv=False, ignore_tpol=True,
+                   do_mv=False, include_Tpol_secondary=False,
                    comm=None, w2=1., w4=1.):
+
+    if do_mv:
+        if include_Tpol_secondary:
+            raise NotImplementedError("not yet implemented full MV bias including Tpol secondary terms")
+
     
     cl_fg = get_cl_smooth(fg_alm)[:recon_setup["mlmax"]+1] / w2
     
@@ -143,7 +148,7 @@ def get_bias_terms(fg_alm, recon_setup,
     for est in ests:
         jobs.append(
             (est, recon_setup["qfunc_tt_%s"%est],
-             None,
+             (recon_setup["qfunc_te_%s"%est] if include_Tpol_secondary else None),
              recon_setup["get_fg_trispectrum_phi_N0_%s"%est]
             )
         )
@@ -164,7 +169,7 @@ def get_bias_terms(fg_alm, recon_setup,
         
         #Do secondary
         print("doing secondary")
-        if qfunc_te is not None:
+        if include_Tpol_secondary:
             secondary_terms = get_all_secondary_terms(
                 qfunc, qfunc_te, fg_alms_filtered,
                 cmb_alms_filtered, cmbp_alms_filtered
@@ -185,7 +190,7 @@ def get_bias_terms(fg_alm, recon_setup,
         cl_tri_raw = curvedsky.alm2cl(phi_fg_fg[0], phi_fg_fg[0]) / w4
         tri_N0 = get_tri_N0(cl_fg)[0] #0th element for gradient
 
-        outputs['trispectrum_'+est_name] = cl_tri_raw - N0_phi
+        outputs['trispectrum_'+est_name] = cl_tri_raw - tri_N0
         outputs['tri_N0_'+est_name] = tri_N0 
 
         outputs['total_'+est_name] = (outputs['primary_%s'%est_name]
@@ -194,32 +199,26 @@ def get_bias_terms(fg_alm, recon_setup,
         )
         
         if do_mv:
-            if ignore_tpol:
-                wL_sum = 0.
-                for pol in pols:
-                    wL_sum += 1./setup["norms"][pol]
-                wL_TT = (1./setup["norms"]["TT"]) / wL_sum
-                wL_TE = (1./setup["norms"]["TE"]) / wL_sum
-                wL_TB = (1./setup["norms"]["TB"]) / wL_sum
-                
-                #outputs["total_mv_"+est_name] = (
-                #    wL_TT**2 * outputs['total_'+est_name]
-                #    + 0.5 * (
-        
-    #also add true phi auto
-    outputs["cl_phi"] = curvedsky.alm2cl(phi_alm)
-        
-    if do_mv:
-        if ignore_tpol:
+            pols = ["TT","TE","EE","BB","EB"]
             wL_sum = 0.
-            for pol in pols:
-                wL_sum += 1./fg_terms['norm_phi_%s'%pol]
             wLs = {}
             for pol in pols:
-                wLs[pol] = (1./fg_terms['norm_phi_%s'%pol])/wL_sum
-            wLs["wL_sum"] = wL_sum
-            
-            #simple mv estimate
+                norm_pol = recon_setup["norms"][pol][0]
+                assert len(norm_pol) == recon_setup["mlmax"]+1
+                wLs[pol] = 1./norm_pol
+                wL_sum += 1./norm_pol #0 is the gradient part
+
+            for pol in pols:
+               wLs[pol] = wLs[pol] / wL_sum
+
+            #Simple MV estimate ignoring Tpol secondary terms for now
+            outputs["total_mv_"+est_name] = (
+                wLs["TT"]**2 * outputs['total_'+est_name]
+                + 0.5 * wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name]
+                )
+
+    #also add true phi auto
+    outputs["cl_phi"] = curvedsky.alm2cl(phi_alm)
         
     print("returning outputs")
 
