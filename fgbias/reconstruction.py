@@ -115,8 +115,8 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax, ucls,
                 curvedsky.almxfl(phi_nonorm[1], norm_lens[1]))
     
     recon_stuff["qfunc_tt_qe"] = qfunc_tt_qe
-    recon_stuff["qfunc_tt_qe_incfilter"] = lambda X,Y: qfunc(filter_alms_X(X),
-                                                                filter_alms_X(Y))
+    recon_stuff["qfunc_tt_qe_incfilter"] = lambda X,Y: qfunc_tt_qe(filter_alms(X),
+                                                                filter_alms(Y))
 
     #Get the N0
     recon_stuff["N0_phi"] = norm_lens
@@ -140,7 +140,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax, ucls,
 
     if do_Tpol:
         def qfunc_te_qe(X_filtered, Y_filtered):
-            phi_nonorm = qe_all(px, ucls, mlmax,
+            phi_nonorm = qe.qe_all(px, ucls, mlmax,
                                 fTalm=Y_filtered[0], fEalm=Y_filtered[1],fBalm=Y_filtered[2],
                                 estimators=['TE'],
                                 xfTalm=X_filtered[0], xfEalm=X_filtered[1],xfBalm=X_filtered[1])['TE']
@@ -200,7 +200,7 @@ def setup_AAAA_recon(px, lmin, lmax, mlmax, ucls,
         #    px, ucls, mlmax, "TT", est2='SRC', Al1=norms['TT'],
         #    Al2=norm_src, R12=R_src_tt)
         recon_stuff["qfunc_tt_psh"] = qfunc_tt_psh
-        recon_stuff["qfunc_tt_psh_incfilter"] = lambda X,Y: qfunc_psh(filter_alms(X),
+        recon_stuff["qfunc_tt_psh_incfilter"] = lambda X,Y: qfunc_tt_psh(filter_alms(X),
                                                                 filter_alms(Y))
         def get_fg_trispectrum_phi_N0_psh(cl_fg):
             Ctot = tcls['TT']**2 / cl_fg

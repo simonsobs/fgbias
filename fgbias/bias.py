@@ -121,7 +121,8 @@ def get_bias_terms(fg_alm, recon_setup,
                    phi_alm, cmb_alm, cmbp_alm,
                    ests=["qe","psh","prh"], 
                    do_mv=False, include_Tpol_secondary=False,
-                   comm=None, w2=1., w4=1.):
+                   comm=None, w2=1., w4=1., 
+                   split_mv_biases=False):
 
     if do_mv:
         if include_Tpol_secondary:
@@ -193,17 +194,26 @@ def get_bias_terms(fg_alm, recon_setup,
         outputs['trispectrum_'+est_name] = cl_tri_raw - tri_N0
         outputs['tri_N0_'+est_name] = tri_N0 
 
-        outputs['total_'+est_name] = (outputs['primary_%s'%est_name]
-                                   +outputs['secondary_%s'%est_name]
-                                   +outputs['trispectrum_%s'%est_name]
-        )
+        outputs['total_'+est_name] = outputs['primary_%s'%est_name]+outputs['secondary_%s'%est_name]+outputs['trispectrum_%s'%est_name]
+        # print(type(outputs["primary_%s"%est_name]))
+        # print(type(outputs["primary_%s"%est_name][100]))
+        # print(type(outputs["secondary_%s"%est_name]))
+        # print(type(outputs["trispectrum_%s"%est_name]))
+        # print(type(outputs["total_%s"%est_name]))
+        # assert np.all(outputs['total_%s'%est_name]==outputs["primary_%s"%est_name]+outputs["secondary_%s"%est_name]+outputs["trispectrum_%s"%est_name])
         
         if do_mv:
             pols = ["TT","TE","EE","BB","EB"]
             wL_sum = 0.
             wLs = {}
             for pol in pols:
-                norm_pol = recon_setup["norms"][pol][0]
+                if est_name=="qe":
+                    norm_pol = recon_setup["norms"][pol][0]
+                elif est_name=="prh":
+                    if pol=="TT":
+                        norm_pol = recon_setup["N0_phi_prh"][0]
+                    else:
+                        norm_pol = recon_setup["norms"][pol][0]
                 assert len(norm_pol) == recon_setup["mlmax"]+1
                 wLs[pol] = 1./norm_pol
                 wL_sum += 1./norm_pol #0 is the gradient part
@@ -212,10 +222,15 @@ def get_bias_terms(fg_alm, recon_setup,
                wLs[pol] = wLs[pol] / wL_sum
 
             #Simple MV estimate ignoring Tpol secondary terms for now
-            outputs["total_mv_"+est_name] = (
-                wLs["TT"]**2 * outputs['total_'+est_name]
+            outputs["total_mv_"+est_name] = wLs["TT"]**2 * outputs['total_'+est_name] + 0.5 * wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name]
+                
+            print(est_name)
+            #assert np.all(outputs['total_%s'%est_name]==(outputs["primary_%s"%est_name]+outputs["secondary_%s"%est_name]+outputs["trispectrum_%s"%est_name]))
+            if split_mv_biases:
+                outputs["primary_mv_%s"%est_name] = wLs["TT"]**2 * outputs['primary_%s'%est_name] 
                 + 0.5 * wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name]
-                )
+                outputs["secondary_mv_%s"%est_name] = wLs["TT"]**2 * outputs['secondary_%s'%est_name] 
+                outputs["trispectrum_mv_%s"%est_name] = wLs["TT"]**2 * outputs['trispectrum_%s'%est_name]
 
     #also add true phi auto
     outputs["cl_phi"] = curvedsky.alm2cl(phi_alm)
