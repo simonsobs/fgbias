@@ -203,17 +203,11 @@ def get_bias_terms(fg_alm, recon_setup,
         # assert np.all(outputs['total_%s'%est_name]==outputs["primary_%s"%est_name]+outputs["secondary_%s"%est_name]+outputs["trispectrum_%s"%est_name])
         
         if do_mv:
-            pols = ["TT","TE","EE","BB","EB"]
+            pols = ["TT","TE","TB","EE","EB"]
             wL_sum = 0.
             wLs = {}
             for pol in pols:
-                if est_name=="qe":
-                    norm_pol = recon_setup["norms"][pol][0]
-                elif est_name=="prh":
-                    if pol=="TT":
-                        norm_pol = recon_setup["N0_phi_prh"][0]
-                    else:
-                        norm_pol = recon_setup["norms"][pol][0]
+                norm_pol = recon_setup["norms"][pol][0]
                 assert len(norm_pol) == recon_setup["mlmax"]+1
                 wLs[pol] = 1./norm_pol
                 wL_sum += 1./norm_pol #0 is the gradient part
@@ -222,13 +216,13 @@ def get_bias_terms(fg_alm, recon_setup,
                wLs[pol] = wLs[pol] / wL_sum
 
             #Simple MV estimate ignoring Tpol secondary terms for now
-            outputs["total_mv_"+est_name] = wLs["TT"]**2 * outputs['total_'+est_name] + 0.5 * wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name]
+            outputs["total_mv_"+est_name] = wLs["TT"]**2 * outputs['total_'+est_name] + wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name]
                 
             print(est_name)
             #assert np.all(outputs['total_%s'%est_name]==(outputs["primary_%s"%est_name]+outputs["secondary_%s"%est_name]+outputs["trispectrum_%s"%est_name]))
             if split_mv_biases:
-                outputs["primary_mv_%s"%est_name] = wLs["TT"]**2 * outputs['primary_%s'%est_name] 
-                + 0.5 * wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name]
+                outputs["primary_mv_%s"%est_name] = (wLs["TT"]**2 * outputs['primary_%s'%est_name]
+                + wLs["TT"] * (1-wLs["TT"]) * outputs['primary_%s'%est_name])
                 outputs["secondary_mv_%s"%est_name] = wLs["TT"]**2 * outputs['secondary_%s'%est_name] 
                 outputs["trispectrum_mv_%s"%est_name] = wLs["TT"]**2 * outputs['trispectrum_%s'%est_name]
 
